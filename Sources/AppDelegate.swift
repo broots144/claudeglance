@@ -192,25 +192,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
-    /// A tiny, washed-out build-provenance row for the foot of the menu — the
-    /// same non-highlighting style as the detail rows, just smaller and tertiary
-    /// gray so it stays a subtle signature (mirrors the Settings footer).
+    /// A tiny, washed-out version signature for the foot of the menu —
+    /// right-aligned, non-highlighting, just `v1.1.1` (the full branch@commit
+    /// provenance lives in the Settings window footer).
     private func versionItem() -> NSMenuItem {
         let item = NSMenuItem()
         item.isEnabled = false
-        item.view = readonlyRowView(symbol: nil, text: BuildInfo.current.label,
-                                     font: .systemFont(ofSize: 9), textColor: .tertiaryLabelColor)
+
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        let label = NSTextField(labelWithString: "v\(BuildInfo.current.version)")
+        label.font = .systemFont(ofSize: 9)
+        label.textColor = .tertiaryLabelColor
+        label.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            container.heightAnchor.constraint(equalToConstant: 20),
+            // The menu stretches this view to its full width; pinning the label to
+            // the trailing edge right-aligns it. The min-width keeps it sane if it
+            // were ever the widest row (it won't be).
+            container.widthAnchor.constraint(greaterThanOrEqualToConstant: 120),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -14)
+        ])
+
+        item.view = container
         return item
     }
 
     /// Black, non-highlighting row (optional icon + label), sized to its content.
-    private func readonlyRowView(symbol: String?, text: String, font: NSFont, symbolColor: NSColor = .secondaryLabelColor, textColor: NSColor = .labelColor) -> NSView {
+    private func readonlyRowView(symbol: String?, text: String, font: NSFont, symbolColor: NSColor = .secondaryLabelColor) -> NSView {
         let container = NSView()
         container.translatesAutoresizingMaskIntoConstraints = false
 
         let label = NSTextField(labelWithString: text)
         label.font = font
-        label.textColor = textColor
+        label.textColor = .labelColor
         label.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(label)
 
