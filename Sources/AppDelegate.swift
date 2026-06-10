@@ -168,6 +168,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let quit = actionItem(title: "Quit", symbol: "power", action: #selector(quitApp))
         quit.keyEquivalent = "q"
         menu.addItem(quit)
+
+        menu.addItem(.separator())
+        menu.addItem(versionItem())
     }
 
     /// A read-only header row (e.g. "5hr: 12%"). Uses a custom view so the text is
@@ -189,14 +192,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
+    /// A tiny, washed-out build-provenance row for the foot of the menu — the
+    /// same non-highlighting style as the detail rows, just smaller and tertiary
+    /// gray so it stays a subtle signature (mirrors the Settings footer).
+    private func versionItem() -> NSMenuItem {
+        let item = NSMenuItem()
+        item.isEnabled = false
+        item.view = readonlyRowView(symbol: nil, text: BuildInfo.current.label,
+                                     font: .systemFont(ofSize: 9), textColor: .tertiaryLabelColor)
+        return item
+    }
+
     /// Black, non-highlighting row (optional icon + label), sized to its content.
-    private func readonlyRowView(symbol: String?, text: String, font: NSFont, symbolColor: NSColor = .secondaryLabelColor) -> NSView {
+    private func readonlyRowView(symbol: String?, text: String, font: NSFont, symbolColor: NSColor = .secondaryLabelColor, textColor: NSColor = .labelColor) -> NSView {
         let container = NSView()
         container.translatesAutoresizingMaskIntoConstraints = false
 
         let label = NSTextField(labelWithString: text)
         label.font = font
-        label.textColor = .labelColor
+        label.textColor = textColor
         label.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(label)
 
