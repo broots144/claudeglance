@@ -134,33 +134,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(.separator())
         }
 
-        menu.addItem(infoItem(title: "5hr: \(snapshot.fiveHourUtilization)%",
-                              symbol: usageSymbolName(for: snapshot.fiveHourUtilization)))
+        // The OAuth usage rows deep-link to the dashboard's Usage tab (they dim
+        // slightly and brighten on hover — no blue highlight).
+        menu.addItem(linkInfoItem(title: "5hr: \(snapshot.fiveHourUtilization)%",
+                                  symbol: usageSymbolName(for: snapshot.fiveHourUtilization), tab: .usage))
         if let resetIn = snapshot.fiveHourResetIn {
-            menu.addItem(secondaryItem("Resets in: \(resetIn)"))
+            menu.addItem(linkSecondaryItem("Resets in: \(resetIn)", tab: .usage))
         }
         // Burn rate / run-out ETA, once a few polls have established a trend.
         if let burn = usageService.fiveHourBurn, let secs = burn.secondsToLimit {
             let now = Date()
             if burn.hitsLimitBeforeReset(resetAt: snapshot.fiveHourResetAt, now: now) {
-                menu.addItem(secondaryItem("On pace for 100% by \(formatClockTime(now.addingTimeInterval(secs)))"))
+                menu.addItem(linkSecondaryItem("On pace for 100% by \(formatClockTime(now.addingTimeInterval(secs)))", tab: .usage))
             } else if burn.percentPerHour >= 1 {
-                menu.addItem(secondaryItem("Using ~\(Int(burn.percentPerHour.rounded()))%/hr"))
+                menu.addItem(linkSecondaryItem("Using ~\(Int(burn.percentPerHour.rounded()))%/hr", tab: .usage))
             }
         }
         // Recent 5h-usage trend from persisted history (survives restarts).
         let trend = HistoryStore.shared.fiveHourTrend()
         if trend.count >= 2 {
-            menu.addItem(secondaryItem("Trend: \(sparkline(trend, maxValue: 100))"))
+            menu.addItem(linkSecondaryItem("Trend: \(sparkline(trend, maxValue: 100))", tab: .usage))
         }
 
-        menu.addItem(infoItem(title: "Week: \(snapshot.sevenDayUtilization)%", symbol: "calendar"))
+        menu.addItem(linkInfoItem(title: "Week: \(snapshot.sevenDayUtilization)%", symbol: "calendar", tab: .usage))
         if let resetIn = snapshot.sevenDayResetIn {
-            menu.addItem(secondaryItem("Resets in: \(resetIn)"))
+            menu.addItem(linkSecondaryItem("Resets in: \(resetIn)", tab: .usage))
         }
 
         if let sonnet = snapshot.sevenDaySonnetUtilization {
-            menu.addItem(infoItem(title: "Sonnet: \(sonnet)%", symbol: "cpu"))
+            menu.addItem(linkInfoItem(title: "Sonnet: \(sonnet)%", symbol: "cpu", tab: .usage))
         }
 
         // "Today" activity from local Claude Code logs (no Keychain / network).
@@ -247,6 +249,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.isEnabled = false
         item.view = readonlyRowView(symbol: nil, text: text, font: .systemFont(ofSize: 11))
         return item
+    }
+
+    // MARK: - Deep-link rows (open a dashboard tab)
+
+    /// A menu row that opens a dashboard `tab` on click. It renders like a normal
+    /// read-only row but dims slightly and brightens on hover (with a pointer
+    /// cursor) — no standard blue menu highlight.
+    private final class LinkRowView: NSView {
+        var onClick: (() -> Void)?
+        private let content: NSView
+        private let dimAlpha: CGFloat = 0.82
+        private var tracking: NSTrackingArea?
+
+        init(content: NSView) {
+            self.content = content
+            super.init(frame: .zero)
+            translatesAutoresizingMaskIntoConstraints = false
+            content.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(content)
+            NSLayoutConstraint.activate([
+                content.leadingAnchor.constraint(equalTo: leadingAnchor),
+                content.trailingAnchor.constraint(equalTo: trailingAnchor),
+                content.topAnchor.constraint(equalTo: topAnchor),
+                content.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+            content.alphaValue = dimAlpha
+        }
+        required init?(coder: NSCoder) { fatalError() }
+
+        // Route clicks anywhere in the row to this view, not the inner label.
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            bounds.contains(convert(point, from: superview)) ? self : nil
+        }
+        override func mouseUp(with event: NSEvent) { onClick?() }
+        override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            if let tracking { removeTrackingArea(tracking) }
+            let t = NSTrackingArea(rect: bounds,
+                                   options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                   owner: self)
+            addTrackingArea(t); tracking = t
+        }
+        override func mouseEntered(with event: NSEvent) { content.animator().alphaValue = 1.0 }
+        override func mouseExited(with event: NSEvent) { content.animator().alphaValue = dimAlpha }
+    }
+
+    private func linkItem(symbol: String?, title: String, font: NSFont, tab: DashboardTab) -> NSMenuItem {
+        let item = NSMenuItem()
+        item.isEnabled = true
+        let row = LinkRowView(content: readonlyRowView(symbol: symbol, text: title, font: font))
+        row.onClick = { [weak self] in self?.showDashboard(tab) }
+        item.view = row
+        return item
+    }
+
+    /// Header-weight deep-link row (e.g. "5hr: 12%").
+    private func linkInfoItem(title: String, symbol: String, tab: DashboardTab) -> NSMenuItem {
+        linkItem(symbol: symbol, title: title, font: .menuFont(ofSize: 0), tab: tab)
+    }
+
+    /// Detail-weight deep-link row (e.g. "Resets in: 2h 19m").
+    private func linkSecondaryItem(_ text: String, tab: DashboardTab) -> NSMenuItem {
+        linkItem(symbol: nil, title: text, font: .systemFont(ofSize: 11), tab: tab)
     }
 
     /// A clickable menu-row view that opens a URL without the standard blue menu

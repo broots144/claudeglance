@@ -100,7 +100,7 @@ struct UsageTabView: View {
                     }
                 }
                 .chartYScale(domain: 0...100)
-                .chartForegroundStyleScale(["5h": Color.primary, "7d": Color.secondary])
+                .chartForegroundStyleScale(["5h": Color.orange, "7d": Color.blue])
                 .frame(height: 200)
             } else {
                 collecting
