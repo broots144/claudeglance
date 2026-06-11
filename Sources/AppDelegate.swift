@@ -256,25 +256,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// A menu row that opens a dashboard `tab` on click. It renders like a normal
     /// read-only row but dims slightly and brightens on hover (with a pointer
     /// cursor) — no standard blue menu highlight.
+    /// A non-highlighting deep-link row: full-black label at rest, **bolded** on
+    /// hover (plus a pointer cursor) so the affordance reads as a link without a
+    /// blue highlight or any color. Builds its own icon + label so it can hold the
+    /// label reference and swap its font weight on enter/exit.
     private final class LinkRowView: NSView {
         var onClick: (() -> Void)?
-        private let content: NSView
-        private let dimAlpha: CGFloat = 0.82
+        private let label: NSTextField
+        private let baseFont: NSFont
+        private let boldFont: NSFont
         private var tracking: NSTrackingArea?
 
-        init(content: NSView) {
-            self.content = content
+        init(image: NSImage?, text: String, font: NSFont, symbolColor: NSColor) {
+            self.baseFont = font
+            self.boldFont = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask)
+            self.label = NSTextField(labelWithString: text)
             super.init(frame: .zero)
             translatesAutoresizingMaskIntoConstraints = false
-            content.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(content)
-            NSLayoutConstraint.activate([
-                content.leadingAnchor.constraint(equalTo: leadingAnchor),
-                content.trailingAnchor.constraint(equalTo: trailingAnchor),
-                content.topAnchor.constraint(equalTo: topAnchor),
-                content.bottomAnchor.constraint(equalTo: bottomAnchor),
-            ])
-            content.alphaValue = dimAlpha
+
+            label.font = baseFont
+            label.textColor = .labelColor
+            label.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(label)
+
+            var constraints = [
+                heightAnchor.constraint(equalToConstant: 22),
+                label.centerYAnchor.constraint(equalTo: centerYAnchor),
+                trailingAnchor.constraint(equalTo: label.trailingAnchor, constant: 14)
+            ]
+
+            if let image {
+                let icon = NSImageView(image: image)
+                icon.contentTintColor = symbolColor
+                icon.translatesAutoresizingMaskIntoConstraints = false
+                addSubview(icon)
+                constraints += [
+                    icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+                    icon.centerYAnchor.constraint(equalTo: centerYAnchor),
+                    icon.widthAnchor.constraint(equalToConstant: 16),
+                    label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8)
+                ]
+            } else {
+                // Align the label under where a header row's title starts (14 + 16 + 8).
+                constraints.append(label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 38))
+            }
+            NSLayoutConstraint.activate(constraints)
         }
         required init?(coder: NSCoder) { fatalError() }
 
@@ -292,14 +318,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                    owner: self)
             addTrackingArea(t); tracking = t
         }
-        override func mouseEntered(with event: NSEvent) { content.animator().alphaValue = 1.0 }
-        override func mouseExited(with event: NSEvent) { content.animator().alphaValue = dimAlpha }
+        override func mouseEntered(with event: NSEvent) { label.font = boldFont }
+        override func mouseExited(with event: NSEvent) { label.font = baseFont }
     }
 
     private func linkItem(symbol: String?, title: String, font: NSFont, tab: DashboardTab) -> NSMenuItem {
         let item = NSMenuItem()
         item.isEnabled = true
-        let row = LinkRowView(content: readonlyRowView(symbol: symbol, text: title, font: font))
+        let row = LinkRowView(image: symbol.flatMap { menuSymbol($0) },
+                              text: title, font: font, symbolColor: .secondaryLabelColor)
         row.onClick = { [weak self] in self?.showDashboard(tab) }
         item.view = row
         return item
